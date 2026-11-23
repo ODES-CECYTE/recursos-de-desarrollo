@@ -1,0 +1,86 @@
+# Publica en GitHub Pages el Storybook del CECyTE Design System.
+# Compila la rama `produccion` del repositorio privado con una llave de solo lectura
+# (secreto DS_DEPLOY_KEY) y solo se ejecuta a mano: Actions → Publicar Storybook → Run workflow.
+# No tiene disparadores de push ni de pull request, así que el secreto nunca queda al alcance de un fork.
+name: Publicar Storybook
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Una publicación a la vez; si se piden dos seguidas, la segunda espera a la primera.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Compilar y revisar
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Descargar este repositorio (script de revisión)
+        uses: actions/checkout@v4
+        with:
+          path: publico
+
+      - name: Descargar el Design System (rama produccion)
+        uses: actions/checkout@v4
+        with:
+          repository: ODES-CECYTE/cecyte-design-system
+          ref: produccion
+          ssh-key: ${{ secrets.DS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: ds
+
+      - uses: pnpm/action-setup@v4 # toma la versión de "packageManager"
+        with:
+          package_json_file: ds/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ds/pnpm-lock.yaml
+
+      - name: Instalar dependencias
+        working-directory: ds
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar paquetes y Storybook
+        working-directory: ds
+        run: pnpm exec turbo run build --concurrency=2 --filter=@odes-cecyte/docs...
+
+      # Si encuentra algo que no debe ser público, falla y no se publica nada.
+      - name: Revisar el build
+        run: node publico/scripts/revisar-build.mjs ds/apps/docs/storybook-static
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ds/apps/docs/storybook-static
+
+      - name: Resumen
+        run: |
+          VERSION=$(node -p "require('./ds/packages/ui/package.json').version")
+          COMMIT=$(git -C ds rev-parse --short HEAD)
+          {
+            echo "### Storybook ${VERSION}"
+            echo ""
+            echo "Compilado desde \`produccion\` (${COMMIT})."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Publicar en Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
