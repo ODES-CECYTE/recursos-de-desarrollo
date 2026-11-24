@@ -24,12 +24,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Descargar este repositorio (script de revisión)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: publico
 
       - name: Descargar el Design System (rama produccion)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ODES-CECYTE/cecyte-design-system
           ref: produccion
@@ -37,11 +37,11 @@ jobs:
           persist-credentials: false
           path: ds
 
-      - uses: pnpm/action-setup@v4 # toma la versión de "packageManager"
+      - uses: pnpm/action-setup@v6 # toma la versión de "packageManager"
         with:
           package_json_file: ds/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -59,7 +59,7 @@ jobs:
       - name: Revisar el build
         run: node publico/scripts/revisar-build.mjs ds/apps/docs/storybook-static
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ds/apps/docs/storybook-static
 
@@ -83,4 +83,4 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
